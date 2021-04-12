@@ -26,7 +26,14 @@
 #define TRUE    1
 #define MAX_CONNECTIONS 2
 #define MAX_BUFFER_SIZE 1024
+
+// Address to listen on
+#define ADDRESS "127.0.0.1"
 #define PORT    14465   // just a random value
+
+// Prefixes to identify the type of command issued
+#define EXEC_PREFIX         "exec "
+#define WLAN_TOGGLE_PREFIX  "toggle "
 
 /* to toggle wlan state */
 void toggle_wlan(int mode) {
@@ -52,12 +59,9 @@ void toggle_wlan(int mode) {
 }
 
 /* to start wpa_supplicant */
-void start_wpa_supplicant(char *buffer, int buffer_len) {
+void execute_cmd(char *buffer) {
 
     pid_t pid;
-    char command_to_execute[buffer_len + 1];   // +1 to compensate for the '\0'
-
-    strncpy(command_to_execute, buffer, buffer_len);
 
     /* Now execute the command issued */
     if((pid = fork()) < 0) {
@@ -67,7 +71,7 @@ void start_wpa_supplicant(char *buffer, int buffer_len) {
 
     if(pid == 0) {
         // It's the child process, execute the command and terminate
-        system(command_to_execute);
+        system(buffer);
         exit(EXIT_SUCCESS);
     }
 }
@@ -96,7 +100,7 @@ int main(void) {
     /* Set address and port to listen to */
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(PORT);
-    server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_address.sin_addr.s_addr = inet_addr(ADDRESS);
     memset(server_address.sin_zero, '\0', sizeof(server_address.sin_zero));
 
     /* bind to the above address */
@@ -123,12 +127,12 @@ int main(void) {
          * let it just be efficient. It doesn't have to be foolproof.
          */
 
-        if(buffer[0] == 't') {
+        if(!(strncmp(WLAN_TOGGLE_PREFIX, buffer, strlen(EXEC_PREFIX)))) {
             // toggle wlan
-            toggle_wlan(buffer[7] - '0');
-        } else if(buffer[0] == 'w') {
+            toggle_wlan(buffer[7] - '0');   // mode is supposed to be at index 7
+        } else {
             //start wpa_supplicant
-            start_wpa_supplicant(buffer, buffer_len);
+            execute_cmd(buffer);
         }
     }
 
