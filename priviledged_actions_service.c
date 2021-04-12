@@ -1,15 +1,14 @@
 /*
- * This program is intended to be run as a background service(daem
+ * This program is intended to be run as a background service(daemon)
  *
  * It listens to messages sent to "localhost:PORT" (PORT is defined below)
- * It is currently configured to toggle wlan state or to start wpa_supplicant
+ * It is currently configured to toggle wlan state or to execute any other command
  *
  * To toggle wlan, the message must be of the format: "toggle MODE",
  *      where MODE is 0 -> when wlan is to be turned on
  *                    1 -> when wlan is to be turned off
  *
- * To start wpa_supplicant, message must be just the exact command, you'd execute to start it
- *      e.g: "wpa_supplicant -D nl80211 -i wlan0 -c wpa_supplicant.conf"
+ * To execute a command, the message must be of the format: "exec command"
  */
 
 #include <stdio.h>
@@ -23,9 +22,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define TRUE    1
-#define MAX_CONNECTIONS 2
-#define MAX_BUFFER_SIZE 1024
+#define TRUE                    1
+#define FALSE                   0
+#define MAX_CONNECTIONS         2
+#define MAX_BUFFER_SIZE         1024
+#define MAX_PROGRAM_NAME_LEN    50
 
 // Address to listen on
 #define ADDRESS "127.0.0.1"
@@ -34,6 +35,20 @@
 // Prefixes to identify the type of command issued
 #define EXEC_PREFIX         "exec "
 #define WLAN_TOGGLE_PREFIX  "toggle "
+
+/*
+ * Following is a list of programs that are allowed to run
+ *
+ * This is done to avoid security issues, like of course rm -rf /
+ */
+
+// number of allowed programs
+short allowed_programs_num = 2;
+
+char *allowed_programs[] = {
+    "wpa_cli",
+    "wpa_supplicant"
+};
 
 /* to toggle wlan state */
 void toggle_wlan(int mode) {
@@ -58,10 +73,47 @@ void toggle_wlan(int mode) {
     close(fd);
 }
 
+/* To check if programs is allowed to run */
+int program_is_valid(char *buffer) {
+
+    char program_name[MAX_PROGRAM_NAME_LEN];
+    short count, index;
+
+    /* Parse program name from buffer */
+    index = strlen(EXEC_PREFIX);
+
+    for(count = 0; buffer[index] != '\0' && buffer[index] != ' '; count++) {
+        program_name[count] = buffer[index];
+        index++;
+    }
+
+    program_name[count] = '\0';
+
+    for(short program_count = 0; program_count < allowed_programs_num; program_count++)
+        if(!(strncmp(program_name, allowed_programs[program_count], count)))
+            return TRUE;
+
+    fprintf(stderr, "%s: program specified is not allowed!\n", program_name);
+    return FALSE;
+}
+
 /* to start wpa_supplicant */
-void execute_cmd(char *buffer) {
+void execute_cmd(char *buffer, int buffer_len) {
 
     pid_t pid;
+    char *cmd;
+    short index = strlen(EXEC_PREFIX);
+
+    /*
+     *  Allocate memory for the cmd
+     *  To basically just strip off the EXEC_PREFIX
+     */
+
+    cmd = (char *)malloc(buffer_len - index);
+    for(short count = 0; buffer[index] != '\0'; count++) {
+        cmd[count] = buffer[index];
+        index++;
+    }
 
     /* Now execute the command issued */
     if((pid = fork()) < 0) {
@@ -71,9 +123,11 @@ void execute_cmd(char *buffer) {
 
     if(pid == 0) {
         // It's the child process, execute the command and terminate
-        system(buffer);
+        system(cmd);
         exit(EXIT_SUCCESS);
     }
+
+    free(cmd);
 }
 
 void signal_handler(int signum) {
@@ -131,8 +185,10 @@ int main(void) {
             // toggle wlan
             toggle_wlan(buffer[7] - '0');   // mode is supposed to be at index 7
         } else {
-            //start wpa_supplicant
-            execute_cmd(buffer);
+            // execute command
+            if(program_is_valid(buffer)) {
+                execute_cmd(buffer, buffer_len);
+            }
         }
     }
 
