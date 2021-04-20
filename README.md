@@ -1,2 +1,2 @@
-# priviledged_actions_service
-UNIX service to execute commands as super-user. At least this is what it is intended to be.
+# wlan_toggle_service
+UNIX service to run as super-user to be able to toggle wlan

@@ -1,10 +1,10 @@
 CC="gcc"
 
-priviledged_actions_service: priviledged_actions_service.c
-	$(CC) -o priviledged_actions_service priviledged_actions_service.c
+wlan_toggle_service: wlan_toggle_service.c
+	$(CC) -o wlan_toggle_service wlan_toggle_service.c
 
-install: priviledged_actions_service
-	sudo cp ./priviledged_actions_service /usr/local/bin/priviledged_actions_service
+install: wlan_toggle_service
+	sudo cp ./wlan_toggle_service /usr/local/bin/wlan_toggle_service
 
 clean:
-	rm -f ./priviledged_actions_service
+	rm -f ./wlan_toggle_service
